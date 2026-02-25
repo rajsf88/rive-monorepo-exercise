@@ -9,11 +9,16 @@ const fs = require("fs");
 
 const notarizeHook = "scripts/notarize.js";
 const hasNotarizeHook = fs.existsSync(notarizeHook);
+const hasMacIcon = fs.existsSync("assets/icon.icns");
+const hasWinIcon = fs.existsSync("assets/icon.ico");
+const hasMacEntitlements = fs.existsSync("assets/entitlements.mac.plist");
 const winCertSubject = process.env.WIN_CERTIFICATE_SUBJECT?.trim() || "";
 const hasWindowsCert =
     winCertSubject !== "" &&
     winCertSubject.toLowerCase() !== "undefined" &&
     winCertSubject.toLowerCase() !== "null";
+const [githubOwner, githubRepo] = (process.env.GITHUB_REPOSITORY || "").split("/");
+const hasGitHubRepo = Boolean(githubOwner && githubRepo);
 
 /** @type {import('electron-builder').Configuration} */
 const config = {
@@ -48,11 +53,15 @@ const config = {
     // ─── macOS ──────────────────────────────────────────────────────────────────
     mac: {
         category: "public.app-category.graphics-design",
-        icon: "assets/icon.icns",
+        ...(hasMacIcon ? { icon: "assets/icon.icns" } : {}),
         hardenedRuntime: true,
         gatekeeperAssess: false,
-        entitlements: "assets/entitlements.mac.plist",
-        entitlementsInherit: "assets/entitlements.mac.plist",
+        ...(hasMacEntitlements
+            ? {
+                entitlements: "assets/entitlements.mac.plist",
+                entitlementsInherit: "assets/entitlements.mac.plist",
+            }
+            : {}),
         target: [
             { target: "dmg", arch: ["x64", "arm64"] },
             { target: "zip", arch: ["x64", "arm64"] },
@@ -71,7 +80,7 @@ const config = {
 
     // ─── Windows ────────────────────────────────────────────────────────────────
     win: {
-        icon: "assets/icon.ico",
+        ...(hasWinIcon ? { icon: "assets/icon.ico" } : {}),
         target: [
             { target: "nsis", arch: ["x64"] },
         ],
@@ -87,11 +96,25 @@ const config = {
     nsis: {
         oneClick: false,
         allowToChangeInstallationDirectory: true,
-        installerIcon: "assets/icon.ico",
-        uninstallerIcon: "assets/icon.ico",
+        ...(hasWinIcon
+            ? {
+                installerIcon: "assets/icon.ico",
+                uninstallerIcon: "assets/icon.ico",
+            }
+            : {}),
     },
 
-    // Publishing is handled by GitHub Actions release workflow.
+    // Keep provider metadata available in CI so update info generation does not fail.
+    ...(hasGitHubRepo
+        ? {
+            publish: {
+                provider: "github",
+                owner: githubOwner,
+                repo: githubRepo,
+                releaseType: "release",
+            },
+        }
+        : {}),
 };
 
 module.exports = config;
