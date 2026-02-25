@@ -9,6 +9,11 @@ const fs = require("fs");
 
 const notarizeHook = "scripts/notarize.js";
 const hasNotarizeHook = fs.existsSync(notarizeHook);
+const winCertSubject = process.env.WIN_CERTIFICATE_SUBJECT?.trim() || "";
+const hasWindowsCert =
+    winCertSubject !== "" &&
+    winCertSubject.toLowerCase() !== "undefined" &&
+    winCertSubject.toLowerCase() !== "null";
 
 /** @type {import('electron-builder').Configuration} */
 const config = {
@@ -70,9 +75,13 @@ const config = {
         target: [
             { target: "nsis", arch: ["x64"] },
         ],
-        // Code signing: reads WIN_CERT_THUMBPRINT + WIN_CERT_STORE from env in CI
-        certificateSubjectName: process.env.WIN_CERTIFICATE_SUBJECT,
-        signingHashAlgorithms: ["sha256"],
+        ...(hasWindowsCert
+            ? {
+                // Code signing certificate identity from CI secret.
+                certificateSubjectName: winCertSubject,
+                signingHashAlgorithms: ["sha256"],
+            }
+            : {}),
     },
 
     nsis: {
@@ -82,13 +91,7 @@ const config = {
         uninstallerIcon: "assets/icon.ico",
     },
 
-    // ─── Auto-updater ─────────────────────────────────────────────────────────
-    publish: {
-        provider: "github",
-        owner: "rive-app",
-        repo: "rive-desktop",
-        releaseType: "release",
-    },
+    // Publishing is handled by GitHub Actions release workflow.
 };
 
 module.exports = config;
