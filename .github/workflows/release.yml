@@ -122,6 +122,8 @@ jobs:
     if: needs.release.outputs.released == 'true'
     runs-on: ubuntu-latest
     environment: production
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -154,14 +156,14 @@ jobs:
           path: apps/web-editor/out
 
       - name: Deploy to Vercel
-        if: ${{ secrets.VERCEL_TOKEN != '' }}
-        run: npx vercel --prebuilt --token=${{ secrets.VERCEL_TOKEN }} --prod
+        if: ${{ env.VERCEL_TOKEN != '' }}
+        run: npx vercel --prebuilt --token=${{ env.VERCEL_TOKEN }} --prod
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Skip deploy (missing Vercel token)
-        if: ${{ secrets.VERCEL_TOKEN == '' }}
+        if: ${{ env.VERCEL_TOKEN == '' }}
         run: |
           echo "VERCEL_TOKEN is not configured."
           echo "Web build artifact was created, but deployment was skipped."
@@ -169,24 +171,29 @@ jobs:
   release-web-aws:
     name: Release Web Editor (AWS OIDC)
     needs: release
-    if: needs.release.outputs.released == 'true' && secrets.AWS_DEPLOY_ROLE_ARN != '' && vars.AWS_REGION != '' && vars.AWS_ECR_REPOSITORY != ''
+    if: needs.release.outputs.released == 'true' && vars.AWS_REGION != '' && vars.AWS_ECR_REPOSITORY != ''
     runs-on: ubuntu-latest
+    env:
+      AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Configure AWS credentials (OIDC)
+        if: ${{ env.AWS_DEPLOY_ROLE_ARN != '' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Login to Amazon ECR
+        if: ${{ env.AWS_DEPLOY_ROLE_ARN != '' }}
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push web image
+        if: ${{ env.AWS_DEPLOY_ROLE_ARN != '' }}
         id: image
         env:
           REGISTRY: ${{ steps.ecr-login.outputs.registry }}
@@ -199,7 +206,7 @@ jobs:
           echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
 
       - name: Trigger App Runner deployment
-        if: ${{ vars.AWS_APPRUNNER_SERVICE != '' }}
+        if: ${{ env.AWS_DEPLOY_ROLE_ARN != '' && vars.AWS_APPRUNNER_SERVICE != '' }}
         env:
           SERVICE_NAME: ${{ vars.AWS_APPRUNNER_SERVICE }}
         run: |
@@ -217,7 +224,7 @@ jobs:
           fi
 
       - name: Publish App Runner URL to summary
-        if: ${{ vars.AWS_APPRUNNER_SERVICE != '' }}
+        if: ${{ env.AWS_DEPLOY_ROLE_ARN != '' && vars.AWS_APPRUNNER_SERVICE != '' }}
         env:
           SERVICE_NAME: ${{ vars.AWS_APPRUNNER_SERVICE }}
         run: |
@@ -235,10 +242,16 @@ jobs:
           fi
 
       - name: Skip App Runner deploy
-        if: ${{ vars.AWS_APPRUNNER_SERVICE == '' }}
+        if: ${{ env.AWS_DEPLOY_ROLE_ARN != '' && vars.AWS_APPRUNNER_SERVICE == '' }}
         run: |
           echo "AWS_APPRUNNER_SERVICE variable is not set."
           echo "Image was pushed to ECR; App Runner deployment skipped."
+
+      - name: Skip AWS deploy (missing role ARN secret)
+        if: ${{ env.AWS_DEPLOY_ROLE_ARN == '' }}
+        run: |
+          echo "AWS_DEPLOY_ROLE_ARN secret is not configured."
+          echo "AWS OIDC deployment skipped."
 
   release-desktop:
     name: Release Desktop (${{ matrix.os }})
