@@ -15,7 +15,7 @@ function createWindow() {
     mainWindow = new electron_1.BrowserWindow({
         width: 1440,
         height: 900,
-        minWidth: 900,
+        minWidth: 800,
         minHeight: 600,
         title: "Rive Editor",
         backgroundColor: "#0f0f0f",
