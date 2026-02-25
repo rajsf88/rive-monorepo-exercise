@@ -218,7 +218,7 @@ jobs:
             fi
             aws apprunner create-service \
               --service-name "$SERVICE_NAME" \
-              --source-configuration "ImageRepository={ImageIdentifier=${{ steps.image.outputs.image_uri }},ImageRepositoryType=ECR,ImageConfiguration={Port=80},ImageRepositoryAccessRoleArn=${{ secrets.AWS_APPRUNNER_ECR_ACCESS_ROLE_ARN }},AutoDeploymentsEnabled=true}"
+              --source-configuration "ImageRepository={ImageIdentifier=${{ steps.image.outputs.image_uri }},ImageRepositoryType=ECR,ImageConfiguration={Port=80}},AuthenticationConfiguration={AccessRoleArn=${{ secrets.AWS_APPRUNNER_ECR_ACCESS_ROLE_ARN }}},AutoDeploymentsEnabled=true"
           else
             if [ -z "${{ secrets.AWS_APPRUNNER_ECR_ACCESS_ROLE_ARN }}" ]; then
               echo "Missing AWS_APPRUNNER_ECR_ACCESS_ROLE_ARN secret required to pin App Runner to release image tag."
@@ -226,7 +226,7 @@ jobs:
             fi
             aws apprunner update-service \
               --service-arn "$SERVICE_ARN" \
-              --source-configuration "ImageRepository={ImageIdentifier=${{ steps.image.outputs.image_uri }},ImageRepositoryType=ECR,ImageConfiguration={Port=80},ImageRepositoryAccessRoleArn=${{ secrets.AWS_APPRUNNER_ECR_ACCESS_ROLE_ARN }},AutoDeploymentsEnabled=true}"
+              --source-configuration "ImageRepository={ImageIdentifier=${{ steps.image.outputs.image_uri }},ImageRepositoryType=ECR,ImageConfiguration={Port=80}},AuthenticationConfiguration={AccessRoleArn=${{ secrets.AWS_APPRUNNER_ECR_ACCESS_ROLE_ARN }}},AutoDeploymentsEnabled=true"
           fi
 
       - name: Publish App Runner URL to summary
