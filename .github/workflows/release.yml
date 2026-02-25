@@ -218,15 +218,22 @@ jobs:
             fi
             aws apprunner create-service \
               --service-name "$SERVICE_NAME" \
-              --source-configuration "ImageRepository={ImageIdentifier=${{ steps.image.outputs.image_uri }},ImageRepositoryType=ECR,ImageConfiguration={Port=3000},ImageRepositoryAccessRoleArn=${{ secrets.AWS_APPRUNNER_ECR_ACCESS_ROLE_ARN }},AutoDeploymentsEnabled=true}"
+              --source-configuration "ImageRepository={ImageIdentifier=${{ steps.image.outputs.image_uri }},ImageRepositoryType=ECR,ImageConfiguration={Port=80},ImageRepositoryAccessRoleArn=${{ secrets.AWS_APPRUNNER_ECR_ACCESS_ROLE_ARN }},AutoDeploymentsEnabled=true}"
           else
-            aws apprunner start-deployment --service-arn "$SERVICE_ARN"
+            if [ -z "${{ secrets.AWS_APPRUNNER_ECR_ACCESS_ROLE_ARN }}" ]; then
+              echo "Missing AWS_APPRUNNER_ECR_ACCESS_ROLE_ARN secret required to pin App Runner to release image tag."
+              exit 1
+            fi
+            aws apprunner update-service \
+              --service-arn "$SERVICE_ARN" \
+              --source-configuration "ImageRepository={ImageIdentifier=${{ steps.image.outputs.image_uri }},ImageRepositoryType=ECR,ImageConfiguration={Port=80},ImageRepositoryAccessRoleArn=${{ secrets.AWS_APPRUNNER_ECR_ACCESS_ROLE_ARN }},AutoDeploymentsEnabled=true}"
           fi
 
       - name: Publish App Runner URL to summary
         if: ${{ env.AWS_DEPLOY_ROLE_ARN != '' && vars.AWS_APPRUNNER_SERVICE != '' }}
         env:
           SERVICE_NAME: ${{ vars.AWS_APPRUNNER_SERVICE }}
+          IMAGE_URI: ${{ steps.image.outputs.image_uri }}
         run: |
           SERVICE_URL=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='$SERVICE_NAME'].ServiceUrl | [0]" --output text)
           if [ -n "$SERVICE_URL" ] && [ "$SERVICE_URL" != "None" ]; then
@@ -234,6 +241,7 @@ jobs:
               echo "## AWS Web Deployment"
               echo ""
               echo "- Service: \`$SERVICE_NAME\`"
+              echo "- Image: \`$IMAGE_URI\`"
               echo "- URL: https://$SERVICE_URL"
             } >> "$GITHUB_STEP_SUMMARY"
             echo "App URL: https://$SERVICE_URL"
