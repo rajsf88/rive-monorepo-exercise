@@ -6,7 +6,7 @@
     "main": "dist-electron/main.js",
     "scripts": {
         "dev": "electron .",
-        "build": "tsc -p tsconfig.electron.json && electron-builder --config electron-builder.config.js",
+        "build": "tsc -p tsconfig.electron.json && node -e \"if (process.platform !== 'linux') require('child_process').execSync('electron-builder --config electron-builder.config.js', { stdio: 'inherit' })\"",
         "build:mac": "tsc -p tsconfig.electron.json && electron-builder --config electron-builder.config.js --mac",
         "build:win": "tsc -p tsconfig.electron.json && electron-builder --config electron-builder.config.js --win",
         "lint": "eslint src",

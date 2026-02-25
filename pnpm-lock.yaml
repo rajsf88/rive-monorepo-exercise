@@ -42,12 +42,21 @@ importers:
       '@electron/notarize':
         specifier: ^2.5.0
         version: 2.5.0
+      '@typescript-eslint/eslint-plugin':
+        specifier: ^8.24.1
+        version: 8.56.1(@typescript-eslint/parser@8.56.1(eslint@9.39.3)(typescript@5.9.3))(eslint@9.39.3)(typescript@5.9.3)
+      '@typescript-eslint/parser':
+        specifier: ^8.24.1
+        version: 8.56.1(eslint@9.39.3)(typescript@5.9.3)
       electron:
         specifier: ^34.1.1
         version: 34.5.8
       electron-builder:
         specifier: ^25.1.8
         version: 25.1.8(electron-builder-squirrel-windows@25.1.8)
+      eslint:
+        specifier: ^9.20.0
+        version: 9.39.3
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
