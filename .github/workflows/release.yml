@@ -17,6 +17,10 @@ permissions:
   contents: write
   packages: write
 
+env:
+  NODE_VERSION: "20"
+  PNPM_VERSION: "9.15.5"
+
 jobs:
   release:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
@@ -24,6 +28,8 @@ jobs:
     outputs:
       version: ${{ steps.semantic.outputs.new_release_version }}
       released: ${{ steps.semantic.outputs.new_release_published }}
+      tag: ${{ steps.meta.outputs.tag }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -35,7 +41,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Run semantic-release
         id: semantic
@@ -54,6 +60,21 @@ jobs:
             conventional-changelog-conventionalcommits@7.0.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute release metadata
+        id: meta
+        run: |
+          if [ "${{ steps.semantic.outputs.new_release_published }}" = "true" ]; then
+            echo "tag=v${{ steps.semantic.outputs.new_release_version }}" >> "$GITHUB_OUTPUT"
+            if [[ "${{ steps.semantic.outputs.new_release_version }}" == *"-"* ]]; then
+              echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Debug - Check created tags
         run: |
@@ -93,3 +114,126 @@ jobs:
           echo "  - feat: ... (releases MINOR)"
           echo "  - fix: ... (releases PATCH)"
           echo "  - BREAKING CHANGE: ... (releases MAJOR)"
+
+  release-web:
+    name: Release Web Editor
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages first
+        run: pnpm turbo build --filter='./packages/*' --filter='./runtimes/*'
+
+      - name: Build web editor
+        run: pnpm turbo build --filter='@rive-monorepo/web-editor'
+        env:
+          NEXT_PUBLIC_APP_VERSION: ${{ needs.release.outputs.tag }}
+
+      - name: Run production smoke tests
+        run: pnpm turbo test --filter='@rive-monorepo/web-editor'
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-editor-${{ needs.release.outputs.tag }}
+          path: apps/web-editor/out
+
+      - name: Deploy to Vercel
+        run: npx vercel --prebuilt --token=${{ secrets.VERCEL_TOKEN }} --prod
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+  release-desktop:
+    name: Release Desktop (${{ matrix.os }})
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+          - os: windows-latest
+            platform: win
+    runs-on: ${{ matrix.os }}
+    environment: desktop-release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web editor (static export)
+        run: pnpm turbo build --filter='@rive-monorepo/web-editor'
+
+      - name: Import macOS signing certificate
+        if: runner.os == 'macOS'
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          echo "$CERTIFICATE_BASE64" | base64 --decode > certificate.p12
+          security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          rm certificate.p12
+
+      - name: Build Electron (${{ matrix.platform }})
+        run: pnpm --filter @rive-monorepo/desktop-editor build:${{ matrix.platform }}
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          WIN_CERTIFICATE_SUBJECT: ${{ secrets.WIN_CERTIFICATE_SUBJECT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}-${{ needs.release.outputs.tag }}
+          path: apps/desktop-editor/release/**/*
+
+  publish-desktop-assets:
+    name: Publish Desktop Assets
+    needs: [release, release-desktop]
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all desktop artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: ./release-artifacts
+
+      - name: Attach desktop artifacts to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release.outputs.tag }}
+          files: release-artifacts/**/*
+          draft: false
+          prerelease: ${{ needs.release.outputs.prerelease == 'true' }}
