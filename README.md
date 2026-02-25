@@ -24,8 +24,9 @@ rive/
 ├── .github/workflows/          # GitHub Actions CI/CD
 │   ├── ci.yml                  # Main CI (lint, type-check, test, build)
 │   ├── pr-affected.yml         # PR: build/test only affected packages
-│   ├── release-web.yml         # Web editor deploy to Vercel
-│   ├── release-desktop.yml     # Desktop: macOS + Windows builds
+│   ├── release.yml             # CI-gated release orchestration (semantic-release + web + desktop)
+│   ├── release-web.yml         # Legacy tag-based web release workflow
+│   ├── release-desktop.yml     # Legacy tag-based desktop release workflow
 │   └── nightly.yml             # Nightly: full suite + golden tests
 │
 ├── docker/                     # Containerization
@@ -73,6 +74,17 @@ pnpm turbo build
 bash scripts/build-all.sh
 ```
 
+### Containerized Web App
+
+```bash
+# Build web editor container image (serves static export)
+pnpm docker:build:web
+
+# Run locally
+pnpm docker:run:web
+# open http://localhost:3000
+```
+
 ### Run Tests
 
 ```bash
@@ -89,10 +101,20 @@ pnpm turbo test -- --coverage
 ### Development
 
 ```bash
-# Start web editor dev server
-pnpm --filter @rive-monorepo/web-editor dev
+# Recommended: preflight (lint, type-check, test, build) + start web
+./scripts/dev.sh --web
 
-# Start Electron desktop editor
+# Recommended: preflight + start desktop (auto-starts web first)
+./scripts/dev.sh --desktop
+
+# Recommended: preflight + start both
+./scripts/dev.sh --both
+```
+
+Direct package commands are still available:
+
+```bash
+pnpm --filter @rive-monorepo/web-editor dev
 pnpm --filter @rive-monorepo/desktop-editor dev
 ```
 
@@ -113,24 +135,32 @@ which depends on `packages/core`. Turborepo resolves this DAG so you never build
 
 | Trigger | Workflow | What it does |
 |---|---|---|
-| Push / PR | `ci.yml` | lint + test + build all |
-| PR | `pr-affected.yml` | Only affected packages via `--filter=[origin/main]` |
-| `v*.*.*` tag | `release-web.yml` | Build + deploy web editor to Vercel |
-| `v*.*.*` tag | `release-desktop.yml` | macOS DMG + Windows NSIS/MSIX with code signing |
+| Push / PR (`main`, `master`, `develop`) | `ci.yml` | lint + type-check + test + build |
+| PR | `pr-affected.yml` | Only affected packages via Turborepo filters |
+| CI success on `main` / `master` | `release.yml` | semantic-release + web release + desktop release matrix |
 | Midnight PST | `nightly.yml` | Full suite + golden tests + Slack alert on failure |
 
 ## Release Process
 
 ```bash
-# Bump patch: 0.1.0 → 0.1.1
-python3 scripts/release.py --bump patch
-
-# Preview what will happen (no changes made)
-python3 scripts/release.py --bump minor --dry-run
+# Commit with conventional commits:
+#   feat: ...  -> minor
+#   fix: ...   -> patch
+#   BREAKING CHANGE: ... -> major
+git commit -m "feat: add xyz"
+git push origin master
 ```
 
-The script: bumps all `package.json` versions, updates `CHANGELOG.md`, creates a git tag, and pushes.
-GitHub Actions then automatically triggers the deploy workflows.
+What happens automatically:
+1. `ci.yml` runs on push.
+2. `release.yml` runs only if CI succeeds.
+3. `semantic-release` computes and publishes the version/tag.
+4. Same workflow runs:
+   - web build/test/deploy (if Vercel secrets are set),
+   - desktop build matrix (macOS + Windows),
+   - desktop artifact publishing to the release.
+
+`scripts/release.py` is optional for manual/version-forced releases.
 
 ## Infrastructure
 
@@ -139,6 +169,69 @@ AWS resources managed by Terraform in `infra/terraform/`:
 - **S3** — CI build artifacts (versioned, lifecycle: 30 days for nightly)
 - **CloudFront** — Web editor CDN (HTTPS, SPA routing)
 - **ECR** — Docker image registry
+
+### Deploying Container Image (Optional)
+
+The Docker image in `docker/Dockerfile` packages `apps/web-editor/out` and serves it via NGINX on port `3000`.
+
+#### Azure Container Apps (example)
+
+```bash
+# Build and push image to Azure Container Registry (ACR)
+az acr build \
+  --registry <acr-name> \
+  --image rive-web-editor:latest \
+  --file docker/Dockerfile .
+
+# Deploy to Azure Container Apps
+az containerapp create \
+  --name rive-web-editor \
+  --resource-group <resource-group> \
+  --environment <container-app-env> \
+  --image <acr-name>.azurecr.io/rive-web-editor:latest \
+  --target-port 3000 \
+  --ingress external
+```
+
+#### AWS (ECR + App Runner example)
+
+```bash
+# Build image locally
+pnpm docker:build:web
+
+# Tag and push to ECR
+aws ecr get-login-password --region <region> | \
+  docker login --username AWS --password-stdin <account-id>.dkr.ecr.<region>.amazonaws.com
+docker tag rive-web-editor:local <account-id>.dkr.ecr.<region>.amazonaws.com/rive-web-editor:latest
+docker push <account-id>.dkr.ecr.<region>.amazonaws.com/rive-web-editor:latest
+
+# Create/update App Runner service from the ECR image (console or CLI)
+```
+
+### Optional Web Deploy Secrets
+
+Web deploy step in `release.yml` is optional and is skipped when secrets are missing.
+Set these if you want production web deploys from CI:
+- `VERCEL_TOKEN`
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`
+
+### Optional AWS OIDC Deploy (No Access Keys)
+
+`release.yml` also supports AWS deployment using GitHub OIDC (recommended over IAM access keys).
+
+Required GitHub secret:
+- `AWS_DEPLOY_ROLE_ARN` (IAM role ARN trusted by GitHub OIDC)
+
+Optional GitHub secret (required only on first App Runner service creation):
+- `AWS_APPRUNNER_ECR_ACCESS_ROLE_ARN`
+
+Required GitHub repository variables:
+- `AWS_REGION` (for example, `us-east-1`)
+- `AWS_ECR_REPOSITORY` (for example, `rive-web-editor`)
+
+Optional GitHub repository variable:
+- `AWS_APPRUNNER_SERVICE` (if set, workflow will create/start deployment for this App Runner service)
 
 ```bash
 cd infra/terraform

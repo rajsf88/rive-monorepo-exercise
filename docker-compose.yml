@@ -1,0 +1,9 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: rive-web-editor:local
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
