@@ -1,6 +1,6 @@
 # Rive Monorepo
 
-> Production-ready monorepo inspired by [rive-app](https://github.com/rive-app) — built to demonstrate Build & Release DevOps engineering at scale.
+> Production-ready monorepo inspired by [rive-app](https://github.com/rive-app) — built to demonstrate Build & Release DevOps engineering at scales.
 
 ## What's Inside
 
