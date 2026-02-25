@@ -4,10 +4,10 @@ on:
   push:
     branches:
       - "main"
-    paths-ignore:
-      - "README.md"
-      - "PIPELINE_TEST.md"
-      - ".gitignore"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -15,10 +15,6 @@ permissions:
 
 jobs:
   release:
-    # Only run on main branch, skip if commit is from release action itself
-    if: |
-      github.ref == 'refs/heads/main' && 
-      !contains(github.event.head_commit.message, '[skip-release]')
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.semantic.outputs.new_release_version }}
