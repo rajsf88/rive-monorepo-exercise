@@ -16,6 +16,7 @@ concurrency:
 permissions:
   contents: write
   packages: write
+  id-token: write
 
 env:
   NODE_VERSION: "20"
@@ -153,10 +154,91 @@ jobs:
           path: apps/web-editor/out
 
       - name: Deploy to Vercel
+        if: ${{ secrets.VERCEL_TOKEN != '' }}
         run: npx vercel --prebuilt --token=${{ secrets.VERCEL_TOKEN }} --prod
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Skip deploy (missing Vercel token)
+        if: ${{ secrets.VERCEL_TOKEN == '' }}
+        run: |
+          echo "VERCEL_TOKEN is not configured."
+          echo "Web build artifact was created, but deployment was skipped."
+
+  release-web-aws:
+    name: Release Web Editor (AWS OIDC)
+    needs: release
+    if: needs.release.outputs.released == 'true' && secrets.AWS_DEPLOY_ROLE_ARN != '' && vars.AWS_REGION != '' && vars.AWS_ECR_REPOSITORY != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push web image
+        id: image
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          REPOSITORY: ${{ vars.AWS_ECR_REPOSITORY }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          IMAGE_URI="$REGISTRY/$REPOSITORY:$TAG"
+          docker build -f docker/Dockerfile -t "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger App Runner deployment
+        if: ${{ vars.AWS_APPRUNNER_SERVICE != '' }}
+        env:
+          SERVICE_NAME: ${{ vars.AWS_APPRUNNER_SERVICE }}
+        run: |
+          SERVICE_ARN=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='$SERVICE_NAME'].ServiceArn | [0]" --output text)
+          if [ -z "$SERVICE_ARN" ] || [ "$SERVICE_ARN" = "None" ]; then
+            if [ -z "${{ secrets.AWS_APPRUNNER_ECR_ACCESS_ROLE_ARN }}" ]; then
+              echo "Missing AWS_APPRUNNER_ECR_ACCESS_ROLE_ARN secret required for first-time service creation."
+              exit 1
+            fi
+            aws apprunner create-service \
+              --service-name "$SERVICE_NAME" \
+              --source-configuration "ImageRepository={ImageIdentifier=${{ steps.image.outputs.image_uri }},ImageRepositoryType=ECR,ImageConfiguration={Port=3000},ImageRepositoryAccessRoleArn=${{ secrets.AWS_APPRUNNER_ECR_ACCESS_ROLE_ARN }},AutoDeploymentsEnabled=true}"
+          else
+            aws apprunner start-deployment --service-arn "$SERVICE_ARN"
+          fi
+
+      - name: Publish App Runner URL to summary
+        if: ${{ vars.AWS_APPRUNNER_SERVICE != '' }}
+        env:
+          SERVICE_NAME: ${{ vars.AWS_APPRUNNER_SERVICE }}
+        run: |
+          SERVICE_URL=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='$SERVICE_NAME'].ServiceUrl | [0]" --output text)
+          if [ -n "$SERVICE_URL" ] && [ "$SERVICE_URL" != "None" ]; then
+            {
+              echo "## AWS Web Deployment"
+              echo ""
+              echo "- Service: \`$SERVICE_NAME\`"
+              echo "- URL: https://$SERVICE_URL"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "App URL: https://$SERVICE_URL"
+          else
+            echo "App Runner service URL not found for $SERVICE_NAME"
+          fi
+
+      - name: Skip App Runner deploy
+        if: ${{ vars.AWS_APPRUNNER_SERVICE == '' }}
+        run: |
+          echo "AWS_APPRUNNER_SERVICE variable is not set."
+          echo "Image was pushed to ECR; App Runner deployment skipped."
 
   release-desktop:
     name: Release Desktop (${{ matrix.os }})
