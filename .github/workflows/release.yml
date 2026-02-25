@@ -340,10 +340,29 @@ jobs:
           pattern: desktop-*
           path: ./release-artifacts
 
-      - name: Attach desktop artifacts to release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.release.outputs.tag }}
-          files: release-artifacts/**/*
-          draft: false
-          prerelease: ${{ needs.release.outputs.prerelease == 'true' }}
+      - name: Attach desktop artifacts to release (with retry/backoff)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find release-artifacts -type f | sort)
+          for file in "${files[@]}"; do
+            echo "Uploading: $file"
+            success=0
+            for attempt in 1 2 3 4 5; do
+              if gh release upload "$TAG_NAME" "$file" --clobber; then
+                success=1
+                break
+              fi
+              sleep_seconds=$((attempt * 10))
+              echo "Upload failed (attempt $attempt). Sleeping ${sleep_seconds}s before retry..."
+              sleep "$sleep_seconds"
+            done
+            if [ "$success" -ne 1 ]; then
+              echo "Failed to upload $file after retries"
+              exit 1
+            fi
+            # Small delay between uploads to avoid GitHub secondary rate limits.
+            sleep 2
+          done
