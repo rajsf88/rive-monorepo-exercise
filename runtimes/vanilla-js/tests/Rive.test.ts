@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { Rive } from "../src/Rive";
 
 describe("Rive Vanilla JS", () => {
