@@ -201,8 +201,12 @@ jobs:
           TAG: ${{ needs.release.outputs.tag }}
         run: |
           IMAGE_URI="$REGISTRY/$REPOSITORY:$TAG"
-          docker build -f docker/Dockerfile -t "$IMAGE_URI" .
-          docker push "$IMAGE_URI"
+          if aws ecr describe-images --repository-name "$REPOSITORY" --image-ids imageTag="$TAG" >/dev/null 2>&1; then
+            echo "Image tag $TAG already exists in ECR (immutable). Reusing existing image."
+          else
+            docker build -f docker/Dockerfile -t "$IMAGE_URI" .
+            docker push "$IMAGE_URI"
+          fi
           echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
 
       - name: Trigger App Runner deployment
