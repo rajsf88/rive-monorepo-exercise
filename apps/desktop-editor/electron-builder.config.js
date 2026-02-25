@@ -1,6 +1,6 @@
 /**
  * electron-builder configuration
- * Builds macOS (.dmg, .zip) and Windows (.exe, .msix) installers.
+ * Builds macOS (.dmg, .zip) and Windows (.exe) installers.
  * Code signing and notarization are configured via environment variables
  * set in CI (see .github/workflows/release-desktop.yml).
  */
@@ -69,7 +69,6 @@ const config = {
         icon: "assets/icon.ico",
         target: [
             { target: "nsis", arch: ["x64"] },
-            { target: "msix", arch: ["x64"] },
         ],
         // Code signing: reads WIN_CERT_THUMBPRINT + WIN_CERT_STORE from env in CI
         certificateSubjectName: process.env.WIN_CERTIFICATE_SUBJECT,

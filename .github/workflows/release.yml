@@ -267,6 +267,14 @@ jobs:
             platform: win
     runs-on: ${{ matrix.os }}
     environment: desktop-release
+    env:
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      WIN_CERTIFICATE_SUBJECT: ${{ secrets.WIN_CERTIFICATE_SUBJECT }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -284,11 +292,12 @@ jobs:
         run: pnpm turbo build --filter='@rive-monorepo/web-editor'
 
       - name: Import macOS signing certificate
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE_BASE64 != '' && env.APPLE_CERTIFICATE_PASSWORD != '' && env.KEYCHAIN_PASSWORD != ''
+        continue-on-error: true
         env:
-          CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          CERTIFICATE_BASE64: ${{ env.APPLE_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ env.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ env.KEYCHAIN_PASSWORD }}
         run: |
           security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
           security default-keychain -s build.keychain
@@ -297,6 +306,12 @@ jobs:
           security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
           rm certificate.p12
+
+      - name: Skip macOS cert import
+        if: runner.os == 'macOS' && (env.APPLE_CERTIFICATE_BASE64 == '' || env.APPLE_CERTIFICATE_PASSWORD == '' || env.KEYCHAIN_PASSWORD == '')
+        run: |
+          echo "macOS signing certificate secrets are not fully configured."
+          echo "Continuing with unsigned macOS artifacts."
 
       - name: Build Electron (${{ matrix.platform }})
         run: pnpm --filter @rive-monorepo/desktop-editor build:${{ matrix.platform }}
