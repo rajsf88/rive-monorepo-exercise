@@ -48,6 +48,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Debug - Check created tags
+        run: |
+          echo "Latest tags:"
+          git tag -l --sort=-version:refname | head -10
+          echo ""
+          echo "Semantic release outputs:"
+          echo "  new_release_published: ${{ steps.semantic.outputs.new_release_published }}"
+          echo "  new_release_version: ${{ steps.semantic.outputs.new_release_version }}"
+          echo ""
+          echo "Recent commits:"
+          git log --oneline -5
+
       - name: Display release summary
         if: steps.semantic.outputs.new_release_published == 'true'
         run: |
