@@ -119,7 +119,7 @@ jobs:
   release-web:
     name: Release Web Editor
     needs: release
-    if: needs.release.outputs.released == 'true'
+    if: needs.release.outputs.released == 'true' && vars.ENABLE_VERCEL_RELEASE == 'true'
     runs-on: ubuntu-latest
     environment: production
     env:
@@ -339,5 +339,4 @@ jobs:
         with:
           name: desktop-${{ matrix.platform }}-${{ needs.release.outputs.tag }}
           path: apps/desktop-editor/release/**/*
-
 
