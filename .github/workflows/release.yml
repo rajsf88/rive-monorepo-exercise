@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - "main"
+    paths-ignore:
+      - "README.md"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.semantic.outputs.new_release_version }}
+      released: ${{ steps.semantic.outputs.new_release_published }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run semantic-release
+        id: semantic
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          semantic_version: 23.0.7
+          branches: |
+            [
+              'main',
+              'develop'
+            ]
+          extra_plugins: |
+            @semantic-release/changelog@6.0.3
+            @semantic-release/git@10.0.1
+            conventional-changelog-conventionalcommits@7.0.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Display release summary
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
+          echo "=========================================="
+          echo "Release Summary"
+          echo "=========================================="
+          echo ""
+          echo "✓ Version: ${{ steps.semantic.outputs.new_release_version }}"
+          echo "✓ Tag: v${{ steps.semantic.outputs.new_release_version }}"
+          echo "✓ Channel: ${{ steps.semantic.outputs.new_release_channel }}"
+          echo ""
+          echo "GitHub Release Details:"
+          echo "Repo: ${{ github.repository }}"
+          echo "Branch: ${{ github.ref }}"
+          echo "Commit: ${{ github.sha }}"
+          echo ""
+          echo "=========================================="
+
+      - name: No new release
+        if: steps.semantic.outputs.new_release_published != 'true'
+        run: |
+          echo "No new version to release."
+          echo "Use conventional commits to trigger a new release:"
+          echo "  - feat: ... (releases MINOR)"
+          echo "  - fix: ... (releases PATCH)"
+          echo "  - BREAKING CHANGE: ... (releases MAJOR)"
