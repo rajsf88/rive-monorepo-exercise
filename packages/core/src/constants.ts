@@ -1,4 +1,5 @@
 /** Supported loop modes for Rive animations */
+/**why */
 export enum Loop {
     None = 0,
     Loop = 1,
