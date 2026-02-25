@@ -1,0 +1,41 @@
+{
+    "name": "@rive-monorepo/react",
+    "version": "0.1.0",
+    "description": "React runtime for Rive — mirrors @rive-app/react-canvas",
+    "main": "./dist/index.js",
+    "module": "./dist/index.mjs",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "import": "./dist/index.mjs",
+            "require": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+        }
+    },
+    "scripts": {
+        "build": "tsup src/index.tsx --format cjs,esm --dts --clean --external react",
+        "test": "vitest run --environment jsdom",
+        "lint": "eslint src tests",
+        "clean": "rm -rf dist"
+    },
+    "peerDependencies": {
+        "react": ">=18.0.0",
+        "react-dom": ">=18.0.0"
+    },
+    "dependencies": {
+        "@rive-monorepo/core": "workspace:*",
+        "@rive-monorepo/canvas-renderer": "workspace:*"
+    },
+    "devDependencies": {
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1",
+        "@types/react": "^18.3.18",
+        "@types/react-dom": "^18.3.5",
+        "@testing-library/react": "^16.2.0",
+        "@testing-library/user-event": "^14.5.2",
+        "jsdom": "^26.0.0",
+        "tsup": "^8.4.0",
+        "vitest": "^3.0.6",
+        "typescript": "^5.7.3"
+    }
+}

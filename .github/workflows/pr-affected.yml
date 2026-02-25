@@ -1,0 +1,64 @@
+name: PR — Affected Packages Only
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+env:
+  NODE_VERSION: "20"
+  PNPM_VERSION: "9.15.5"
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+
+jobs:
+  affected:
+    name: Build & Test Affected
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with base branch)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Compute affected packages
+        id: affected
+        run: |
+          AFFECTED=$(pnpm turbo run build --dry-run=json \
+            --filter="...[origin/${{ github.base_ref }}]" | \
+            jq -r '.packages | @csv')
+          echo "packages=$AFFECTED" >> $GITHUB_OUTPUT
+          echo "Affected packages: $AFFECTED"
+
+      - name: Build affected
+        run: |
+          pnpm turbo build \
+            --filter="...[origin/${{ github.base_ref }}]" \
+            --cache-dir=.turbo
+
+      - name: Test affected
+        run: |
+          pnpm turbo test \
+            --filter="...[origin/${{ github.base_ref }}]" \
+            --cache-dir=.turbo
+
+      - name: Comment PR with affected packages
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const affected = '${{ steps.affected.outputs.packages }}';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🔍 Affected Packages\n\`\`\`\n${affected}\n\`\`\`\nOnly the above packages were built and tested.`
+            });

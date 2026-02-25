@@ -1,0 +1,67 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+out/
+.next/
+build/
+
+# Turborepo
+.turbo/
+
+# Coverage
+coverage/
+
+# Electron
+*.dmg
+*.exe
+*.AppImage
+*.deb
+*.rpm
+release/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Terraform
+*.tfstate
+*.tfstate.backup
+.terraform/
+*.tfvars
+!*.tfvars.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Test artifacts
+test-results/
+playwright-report/

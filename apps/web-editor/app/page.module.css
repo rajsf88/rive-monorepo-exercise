@@ -1,0 +1,132 @@
+.main {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  grid-template-rows: 56px 1fr;
+  height: 100vh;
+  background: #0f0f0f;
+  color: #e0e0e0;
+}
+
+.header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: #1a1a1a;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.nav { display: flex; align-items: center; gap: 12px; }
+
+.badge {
+  padding: 4px 10px;
+  background: #2a2a2a;
+  border-radius: 20px;
+  font-size: 12px;
+  color: #aaa;
+}
+
+.canvas_area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 32px;
+  background: #141414;
+}
+
+.canvas_wrapper {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #2a2a2a;
+  background: #1a1a1a;
+}
+
+.canvas { display: block; }
+
+.loading_overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15,15,15,0.85);
+  color: #888;
+  font-size: 13px;
+  gap: 12px;
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #2a2a2a;
+  border-top-color: #FF3D00;
+  border-radius: 50%;
+  animation: spin 0.85s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.controls { display: flex; gap: 12px; }
+
+.btn {
+  padding: 10px 20px;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: #222;
+  color: #e0e0e0;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.btn:hover:not(:disabled) { background: #333; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.panel {
+  padding: 24px;
+  background: #1a1a1a;
+  border-left: 1px solid #2a2a2a;
+  overflow-y: auto;
+}
+
+.panel_title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 16px;
+}
+
+.prop_list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.prop_list li {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #aaa;
+}
+
+.prop_list strong { color: #e0e0e0; font-weight: 500; }

@@ -1,0 +1,31 @@
+{
+    "name": "@rive-monorepo/vanilla-js",
+    "version": "0.1.0",
+    "description": "Pure JS runtime for Rive — mirrors @rive-app/canvas (high-level API)",
+    "main": "./dist/index.js",
+    "module": "./dist/index.mjs",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "import": "./dist/index.mjs",
+            "require": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+        }
+    },
+    "scripts": {
+        "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+        "test": "vitest run --environment jsdom",
+        "lint": "eslint src tests",
+        "clean": "rm -rf dist"
+    },
+    "dependencies": {
+        "@rive-monorepo/core": "workspace:*",
+        "@rive-monorepo/canvas-renderer": "workspace:*"
+    },
+    "devDependencies": {
+        "tsup": "^8.4.0",
+        "vitest": "^3.0.6",
+        "typescript": "^5.7.3",
+        "jsdom": "^26.0.0"
+    }
+}

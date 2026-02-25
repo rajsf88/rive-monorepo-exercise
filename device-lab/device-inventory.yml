@@ -1,0 +1,98 @@
+lab_name: "Rive SF Device Lab"
+location: "San Francisco, CA"
+last_updated: "2024-02-24"
+
+devices:
+  # ─── iOS ────────────────────────────────────────────────────────────────────
+  - id: LAB-iOS-001
+    name: "iPhone 15 Pro"
+    category: mobile
+    platform: iOS
+    os_version: "17.3"
+    purpose: primary iOS runtime testing
+    udid: "00008120-001234ABCDEF5678"  # placeholder
+    runner_label: lab-macos
+    status: active
+
+  - id: LAB-iOS-002
+    name: "iPhone 12"
+    category: mobile
+    platform: iOS
+    os_version: "16.7.4"
+    purpose: legacy iOS compat
+    udid: "00008101-001234ABCDEF1234"
+    runner_label: lab-macos
+    status: active
+
+  - id: LAB-iOS-003
+    name: "iPad Pro M2 (12.9-inch)"
+    category: tablet
+    platform: iPadOS
+    os_version: "17.3"
+    purpose: tablet layout and canvas size testing
+    udid: "00008103-001234ABCDEF9876"
+    runner_label: lab-macos
+    status: active
+
+  # ─── Android ────────────────────────────────────────────────────────────────
+  - id: LAB-AND-001
+    name: "Pixel 8 Pro"
+    category: mobile
+    platform: Android
+    os_version: "14"
+    purpose: primary Android runtime testing
+    serial: "emulator-5554"  # placeholder
+    runner_label: lab-hub
+    status: active
+
+  - id: LAB-AND-002
+    name: "Samsung Galaxy S21"
+    category: mobile
+    platform: Android
+    os_version: "13"
+    purpose: Samsung UI compat testing
+    serial: "R5CT1234ABC"
+    runner_label: lab-hub
+    status: active
+
+  - id: LAB-AND-003
+    name: "Pixel 5"
+    category: mobile
+    platform: Android
+    os_version: "12L"
+    purpose: legacy Android support testing
+    serial: "emulator-5556"
+    runner_label: lab-hub
+    status: maintenance
+
+  # ─── macOS ──────────────────────────────────────────────────────────────────
+  - id: LAB-MAC-001
+    name: "Mac mini M2"
+    category: desktop
+    platform: macOS
+    os_version: "14.3 (Sonoma)"
+    purpose: primary macOS runner + desktop editor testing
+    hostname: rive-lab-mac-mini
+    runner_label: lab-macos
+    status: active
+
+  - id: LAB-MAC-002
+    name: "MacBook Pro M1 (13-inch)"
+    category: laptop
+    platform: macOS
+    os_version: "13.6 (Ventura)"
+    purpose: legacy macOS compat
+    hostname: rive-lab-mbp-m1
+    runner_label: lab-macos
+    status: active
+
+  # ─── Windows ────────────────────────────────────────────────────────────────
+  - id: LAB-WIN-001
+    name: "Intel NUC 12 Pro i7"
+    category: desktop
+    platform: Windows
+    os_version: "Windows 11 22H2"
+    purpose: Windows desktop editor testing
+    hostname: rive-lab-win-nuc
+    runner_label: lab-windows
+    status: active

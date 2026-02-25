@@ -1,0 +1,61 @@
+name: Release — Web Editor
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+      - "web-v*.*.*"
+
+env:
+  NODE_VERSION: "20"
+  PNPM_VERSION: "9.15.5"
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy Web Editor
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages first
+        run: pnpm turbo build --filter='./packages/*' --filter='./runtimes/*'
+
+      - name: Build web editor
+        run: pnpm turbo build --filter='@rive-monorepo/web-editor'
+        env:
+          NEXT_PUBLIC_APP_VERSION: ${{ github.ref_name }}
+
+      - name: Run production smoke tests
+        run: pnpm turbo test --filter='@rive-monorepo/web-editor'
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-editor-${{ github.ref_name }}
+          path: apps/web-editor/out
+
+      # ── Deploy to Vercel (or swap for S3/CloudFront) ──────────────────────
+      - name: Deploy to Vercel
+        run: npx vercel --prebuilt --token=${{ secrets.VERCEL_TOKEN }} --prod
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      # ── Create GitHub Release ─────────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/web-editor/out/**
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}

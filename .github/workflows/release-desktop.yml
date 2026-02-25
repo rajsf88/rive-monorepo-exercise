@@ -1,0 +1,111 @@
+name: Release — Desktop Editor
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+      - "desktop-v*.*.*"
+
+env:
+  NODE_VERSION: "20"
+  PNPM_VERSION: "9.15.5"
+
+jobs:
+  build-desktop:
+    name: Build Desktop (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+            artifact_name: Rive Editor.dmg
+          - os: windows-latest
+            platform: win
+            artifact_name: Rive Editor Setup.exe
+
+    runs-on: ${{ matrix.os }}
+    environment: desktop-release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ── Build shared packages + web editor (embedded in Electron) ──────────
+      - name: Build web editor (static export)
+        run: pnpm turbo build --filter='@rive-monorepo/web-editor'
+
+      # ── macOS: Import Developer Certificate ────────────────────────────────
+      - name: Import macOS signing certificate
+        if: runner.os == 'macOS'
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          # Create a temporary keychain for the signing certificate
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+
+          # Import the certificate
+          echo "$CERTIFICATE_BASE64" | base64 --decode > certificate.p12
+          security import certificate.p12 \
+            -k build.keychain \
+            -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign
+
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PASSWORD" build.keychain
+
+          rm certificate.p12
+
+      # ── Build Electron app ─────────────────────────────────────────────────
+      - name: Build Electron (${{ matrix.platform }})
+        run: pnpm --filter @rive-monorepo/desktop-editor build:${{ matrix.platform }}
+        env:
+          # macOS notarization
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          # Windows signing
+          WIN_CERTIFICATE_SUBJECT: ${{ secrets.WIN_CERTIFICATE_SUBJECT }}
+          # GitHub publish token
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Upload artifacts ───────────────────────────────────────────────────
+      - name: Upload desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}-${{ github.ref_name }}
+          path: apps/desktop-editor/release/**/*
+
+  # ── Create unified GitHub Release ─────────────────────────────────────────
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: build-desktop
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: ./release-artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/**/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
