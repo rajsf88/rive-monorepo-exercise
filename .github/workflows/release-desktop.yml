@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v*.*.*"
-      - "desktop-v*.*.*"
 
 env:
   NODE_VERSION: "20"
